@@ -13,21 +13,20 @@ app.add_url_rule("/<path:filename>", view_func=app.send_static_file, endpoint="s
 
 def monit(host, data):
   response = requests.get("http://" + host + ":2812/_status?format=xml")
+  service_name = data.get("serviceName", "")
+
   if response.status_code == 200:
     ok = True
     parser = etree.XMLParser(ns_clean=True, recover=True, encoding='utf-8')
     doc = etree.fromstring(str(response.text), parser=parser)
-    service_name = data.get("serviceName", "")
     if "system_" in service_name: # this is a system
       server = doc.findall("server")[0]
 
-      uptime = int(server.findall("uptime")[0].text)
-      uptime /= 3600
+      uptime = round(int(server.findall("uptime")[0].text) / 3600.0, 1)
       uptime = str(uptime) + "hr"
       for service in doc.findall("service"):
         if service.get("type") == "5" and service.findall("name")[0].text == service_name:
           break
-
 
       status = service.findall("status")[0].text
       updated = int(service.findall("collected_sec")[0].text)
@@ -40,16 +39,36 @@ def monit(host, data):
       extra_data = {
         "updatedAt": updated,
         "items": [
+          {"label": "Host", "value": host},
           {"label": "Load", "value": load},
           {"label": "Memory", "value": memory},
           {"label": "Uptime", "value": uptime}
         ]
       }
-      if status != "0":
-        ok = False
-        extra_data["items"].append({"label": "Status Code", "value": status})
-    else:
-      raise NotImplementedError
+    else: # some monit services..
+      for service in doc.findall("service"):
+        if service.get("type") == "3" and service.findall("name")[0].text == service_name:
+          break
+
+      status = service.findall("status")[0].text
+      updated = int(service.findall("collected_sec")[0].text)
+      cpu = service.findall("cpu")[0].findall("percent")[0].text
+      memory = service.findall("memory")[0]
+      memory_percent = memory.findall("percent")[0].text
+      memory_megabyte = round(int(memory.findall("kilobyte")[0].text) / 1024.0, 2)
+      memory = "{}% ({} MB)".format(memory_percent, memory_megabyte)
+      extra_data = {
+        "items": [
+          {"label": "Host", "value": host},
+          {"label": "CPU", "value": cpu},
+          {"label": "Memory", "value": memory},
+        ],
+        "updatedAt": updated
+      }
+
+    if status != "0":
+      ok = False
+      extra_data["items"].append({"label": "Status Code", "value": status})
 
   else:
     ok = False
@@ -65,7 +84,7 @@ def ping(host, data):
     ok = True
   else:
     ok = False
-  return ok, {"updatedAt": int(time.time())}
+  return ok, {"updatedAt": int(time.time()), "items": [{"label": "Host", "value": host}]}
 
 # returns up/down, extra_data
 monitors = {

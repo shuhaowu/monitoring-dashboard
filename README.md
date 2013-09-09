@@ -18,3 +18,5 @@ Optimized for 1080p screens.
 Screenie: 
 
 ![Screenie~](http://i.imgur.com/zZuQ7yj.png)
+
+Based on: https://github.com/pushmatrix/mini-dashing

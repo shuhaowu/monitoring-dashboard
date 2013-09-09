@@ -13,11 +13,14 @@ Dashing.on("ready", function() {
     Dashing.widgets[id][0].node.style.backgroundColor = data.backgroundColor;
   }
 
+  var Services = {};
+
   for (var id in Systems) {
     if (!Systems.hasOwnProperty(id)) continue;
     var name = id.charAt(0).toUpperCase() + id.slice(1);
     var items = [
-      {label: "IP", value: Systems[id].ip},
+      {label: "Status", value: "Unknown"},
+      {label: "Host", value: Systems[id].ip}
     ];
     if (Systems[id].monitor == "monit") {
       items.push({label: "CPU", value: "Unknown"});
@@ -30,38 +33,70 @@ Dashing.on("ready", function() {
       title: name,
       backgroundColor: UNKNOWN_COLOR
     });
+
+    if (Systems[id].services) {
+      for (var i=0; i<Systems[id].services.length; i++) {
+        var sid = id + Systems[id].services[i];
+        Services[sid] = {
+          ip: Systems[id].ip,
+          serviceName: Systems[id].services[i],
+          monitor: "monit"
+        };
+
+        updateWidget(sid, {
+          items: [
+            {label: "Status", value: "Unknown"},
+            {label: "Host", value: Systems[id].ip},
+            {label: "CPU", value: "Unknown"},
+            {label: "Memory", value: "Unknown"},
+            {label: "Uptime", value: "Unknown"}
+          ],
+          title: Systems[id].services[i] + "@" + name,
+          backgroundColor: UNKNOWN_COLOR,
+          unordered: true
+        });
+      }
+    }
   }
 
   function updateAllSystems() {
     console.log("Updating all systems");
     var allSystems = [];
-    for (var id in Systems) {
-      if (!Systems.hasOwnProperty(id)) continue;
+
+    var updateOne = function(id, system) {
       var req = $.ajax({
         url: "/status",
-        data: Systems[id],
+        data: system,
         dataType: "json"
       });
 
       if (id in CriticalSystems)
         allSystems.push(req);
 
-      (function(id) {
-        req.done(function(data) {
-          updateWidget(id, data);
-        });
-      })(id);
+      req.done(function(data) {
+        updateWidget(id, data);
+      });
 
-      (function(id) {
-        req.fail(function(xhr) {
-          try {
-            var data = JSON.parse(xhr.responseText);
-            updateWidget(id, data);
-          } catch (e) {
-            updateWidget(id, {title: "ERROR!!"});
-          }
-        });
-      })(id);
+      req.fail(function(xhr) {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          data.title = id.charAt(0).toUpperCase() + id.slice(1);
+          updateWidget(id, data);
+        } catch (e) {
+          updateWidget(id, {title: "ERROR!!", backgroundColor: ERROR_COLOR, updatedAt: (new Date()).getTime() / 1000});
+          console.log(e);
+        }
+      });
+    };
+
+    for (var id in Systems) {
+      if (!Systems.hasOwnProperty(id)) continue;
+      updateOne(id, Systems[id]);
+    }
+
+    for (var id in Services) {
+      if (!Services.hasOwnProperty(id)) continue;
+      updateOne(id, Services[id]);
     }
 
     var critical = $.when.apply($, allSystems);
@@ -78,6 +113,6 @@ Dashing.on("ready", function() {
   };
 
   updateAllSystems();
-  setInterval(updateAllSystems, 30000);
+  setInterval(updateAllSystems, 60000);
 
 });
