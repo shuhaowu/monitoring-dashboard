@@ -1,0 +1,15 @@
+var Systems = {
+  "celery": {
+    ip: "10.11.0.1",
+    monitor: "monit",
+    serviceName: "system_celery.thekks.net" // name as indicated by monit
+  },
+  "DBServer1": {
+    ip: "dbserver1.vpn",
+    monitor: "ping"
+};
+
+var CriticalSystems = {
+  "celery": true,
+  "DBServer1": true,
+};
